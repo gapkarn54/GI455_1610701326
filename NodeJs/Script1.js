@@ -1,4 +1,12 @@
 var websocket = require('ws');
+const sqlite3 = require('sqlite3').verbose();
+
+let db = new sqlite3.Database("./DB/chatDB.db",sqlite3.OPEN_CREATE | sqlite3.OPEN_READWRITE, (err)=>
+{
+    if(err) throw err;
+
+    console.log("Connected to database.");
+});
 
 var callbackInitServer = ()=>
 {
@@ -185,6 +193,115 @@ wss.on("connection", (ws)=>{
                 //=======================================================
 
                 console.log("leave room fail");
+            }
+        }
+        else if(toJsonObj.eventName == "Login")
+        {
+            var splitStr = toJsonObj.data.split('#')
+            var userID = splitStr[0]
+            var password = splitStr[1]
+
+            var sqlSelect = "SELECT * FROM UserData WHERE UserID='"+userID+"' AND Password='"+password+"'";
+
+            db.all(sqlSelect, (err, rows)=>
+            {
+                if(err)
+                {
+                    console.log([0] + err)
+                }
+                else
+                {
+                    if(rows.length > 0)
+                    {
+                        console.log("-----1-----")
+                        console.log(rows)
+                        console.log("-----1-----")
+
+                        var callbackMsg = {
+                            eventName:"Login",
+                            data:rows[0].Name
+                        }
+                        var toJsonStr = JSON.stringify(callbackMsg);
+                        ws.send(toJsonStr);
+                    }
+                    else
+                    {
+                        console.log("Login is Fail")
+
+                        var callbackMsg = {
+                            eventName:"Login",
+                            data:"Fail"
+                        }
+                        var toJsonStr = JSON.stringify(callbackMsg);
+                        ws.send(toJsonStr);
+                    }
+                }
+            })
+        }
+        else if(toJsonObj.eventName == "Register")
+        {
+            var splitStr = toJsonObj.data.split('#')
+            var userID = splitStr[0]
+            var password = splitStr[1]
+            var userName = splitStr[2]
+
+            var sqlInsert = "INSERT INTO UserData (UserID,Password,Name) VALUES ('"+userID+"' , '"+password+"' , '"+userName+"')";
+
+            db.all(sqlInsert, (err, rows)=>
+            {
+                if(err)
+                {
+                    console.log("Register is Fail")
+                    console.log("Register Fail :" + err)
+                    console.log(toJsonObj)
+                    console.log(splitStr[0] + "/" + splitStr[1] + "/" + splitStr[2])
+
+                    var callbackMsg = {
+                        eventName:"Register",
+                        data:"Fail"
+                    }
+                    var toJsonStr = JSON.stringify(callbackMsg);
+                    ws.send(toJsonStr);
+                    console.log(toJsonStr)
+                }
+                else
+                {
+                    console.log("Register is Success")
+
+                    var callbackMsg = {
+                        eventName:"Register",
+                        data:"Success"
+                    }
+                    var toJsonStr = JSON.stringify(callbackMsg);
+                    ws.send(toJsonStr);
+                }
+            })
+        }
+        else if(toJsonObj.eventName == "SendMessage")
+        {
+            var selectionRoomIndex = -1;
+
+            for(var i = 0; i < roomList.length; i++)
+            {
+                for(var j = 0; j < roomList[i].wsList.length; j++)
+                {
+                    if(ws == roomList[i].wsList[j])
+                    {
+                        selectionRoomIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            for(var i = 0; i < roomList[selectionRoomIndex].wsList.length; i++)
+            {
+                    var callbackMsg = {
+                        eventName:"SendMessage",
+                        data:toJsonObj.data,
+                        user:toJsonObj.user
+                    }
+                    
+                    roomList[selectionRoomIndex].wsList[i].send(JSON.stringify(callbackMsg));
             }
         }
     });
